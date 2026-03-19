@@ -1,0 +1,27 @@
+{
+  "name": "ලංකා ඉන්ධන පරීක්ෂකය",
+  "short_name": "ඉන්ධන App",
+  "description": "ශ්‍රී ලංකා ඉන්ධන ඔත්ත/ඉරට් දින පරීක්ෂා කිරීමේ යෙදුම",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#f0f4f0",
+  "theme_color": "#006600",
+  "orientation": "portrait",
+  "lang": "si",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["utilities"],
+  "screenshots": []
+}
