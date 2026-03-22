@@ -1,1 +1,793 @@
+<!DOCTYPE html>
+<html lang="si">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>ලංකා ඉන්ධන පරීක්ෂකය</title>
 
+<!-- PWA -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#006600">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="ඉන්ධන App">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="application-name" content="ඉන්ධන App">
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@400;600;800&family=Noto+Sans+Sinhala:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body {
+    font-family: 'Noto Sans Sinhala', 'Baloo 2', sans-serif;
+    background: #f0f4f0; min-height: 100vh;
+    display: flex; align-items: flex-start; justify-content: center;
+    padding: env(safe-area-inset-top, 20px) 20px 40px;
+  }
+  .container { width: 100%; max-width: 420px; }
+
+  .header { text-align: center; margin-bottom: 16px; animation: slideDown 0.5s ease-out; }
+  @keyframes slideDown { from { opacity:0; transform:translateY(-20px); } to { opacity:1; transform:translateY(0); } }
+  @keyframes fadeUp    { from { opacity:0; transform:translateY(10px);  } to { opacity:1; transform:translateY(0); } }
+  @keyframes popIn     { from { opacity:0; transform:scale(0.88); }        to { opacity:1; transform:scale(1); } }
+
+  .flag-strip {
+    display:flex; height:5px; border-radius:4px; overflow:hidden;
+    margin-bottom:12px; box-shadow:0 2px 8px rgba(0,0,0,0.1);
+  }
+  .flag-strip div:nth-child(1){flex:1;background:#8B0000;}
+  .flag-strip div:nth-child(2){flex:1;background:#FF9933;}
+  .flag-strip div:nth-child(3){flex:3;background:#006600;}
+  .app-title { font-size:24px; font-weight:800; color:#1a2e1a; font-family:'Baloo 2',cursive; }
+  .app-title span { color:#006600; }
+  .subtitle { font-size:13px; color:#666; margin-top:3px; }
+
+  /* Install banner */
+  #installBanner {
+    display:none; background:#006600; color:#fff; border-radius:14px;
+    padding:12px 16px; margin-bottom:12px; align-items:center; gap:12px;
+    box-shadow:0 3px 12px rgba(0,102,0,0.3); animation:fadeUp 0.4s ease-out both;
+  }
+  #installBanner .ib-text { flex:1; font-size:13px; line-height:1.5; }
+  #installBanner .ib-text strong { display:block; font-size:14px; margin-bottom:2px; }
+  #installBtn {
+    background:#fff; color:#006600; border:none; border-radius:9px;
+    padding:8px 14px; font-size:13px; font-weight:700; cursor:pointer;
+    font-family:'Noto Sans Sinhala',sans-serif; white-space:nowrap;
+  }
+  #dismissBtn {
+    background:transparent; border:none; color:rgba(255,255,255,0.7);
+    font-size:18px; cursor:pointer; padding:4px; line-height:1;
+  }
+
+  .date-card {
+    background:#fff; border-radius:14px; padding:12px 16px;
+    display:flex; align-items:center; justify-content:space-between;
+    margin-bottom:12px; box-shadow:0 2px 10px rgba(0,0,0,0.07);
+    animation:fadeUp 0.4s 0.1s ease-out both;
+  }
+  .date-label { font-size:10px; color:#999; text-transform:uppercase; letter-spacing:0.8px; margin-bottom:2px; font-family:'Baloo 2'; }
+  .date-value { font-size:14px; font-weight:700; color:#1a2e1a; }
+  .day-badge { padding:6px 12px; border-radius:20px; font-size:12px; font-weight:700; font-family:'Baloo 2'; }
+  .day-badge.even { background:#e8f5e9; color:#2e7d32; border:1.5px solid #a5d6a7; }
+  .day-badge.odd  { background:#fff8e1; color:#e65100; border:1.5px solid #ffcc80; }
+
+  .tabs {
+    display:flex; gap:7px; margin-bottom:14px;
+    background:#fff; border-radius:14px; padding:6px;
+    box-shadow:0 2px 10px rgba(0,0,0,0.07);
+  }
+  .tab-btn {
+    flex:1; padding:10px 4px; border:none; border-radius:10px;
+    font-size:12px; font-weight:700; cursor:pointer;
+    font-family:'Noto Sans Sinhala',sans-serif;
+    background:transparent; color:#888; transition:all 0.2s;
+  }
+  .tab-btn.active { background:#006600; color:#fff; box-shadow:0 2px 8px rgba(0,102,0,0.25); }
+
+  /* CHECKER */
+  .main-card {
+    background:#fff; border-radius:18px; padding:22px;
+    margin-bottom:12px; box-shadow:0 2px 14px rgba(0,0,0,0.07);
+    animation:fadeUp 0.4s 0.15s ease-out both;
+  }
+  .input-label { font-size:13px; color:#444; font-weight:600; display:block; margin-bottom:10px; }
+  .plate-display {
+    background:#f8faf8; border:2px solid #c8e6c9; border-radius:12px;
+    padding:12px 16px; text-align:center; min-height:56px;
+    display:flex; align-items:center; justify-content:center; margin-bottom:6px;
+  }
+  .hint { font-size:11px; color:#aaa; text-align:center; margin-bottom:12px; }
+  .numpad { display:grid; grid-template-columns:repeat(3,1fr); gap:7px; margin-bottom:14px; }
+  .num-btn {
+    background:#f5f5f5; border:1.5px solid #e0e0e0; border-radius:10px;
+    padding:13px; font-size:19px; font-weight:700; color:#1a2e1a;
+    cursor:pointer; font-family:'Baloo 2',cursive; transition:all 0.15s;
+    user-select:none;
+  }
+  .num-btn:hover { background:#e8f5e9; border-color:#a5d6a7; transform:scale(1.04); }
+  .num-btn:active { transform:scale(0.96); background:#c8e6c9; }
+  .num-btn.del { background:#fff3f3; border-color:#ffcdd2; color:#c62828; font-size:15px; }
+  .num-btn.del:hover { background:#ffcdd2; }
+  .num-btn.zero { grid-column:span 2; }
+  .check-btn {
+    width:100%; padding:14px; border:none; border-radius:12px;
+    background:linear-gradient(135deg,#2e7d32,#388e3c); color:#fff;
+    font-size:16px; font-weight:700; font-family:'Noto Sans Sinhala',sans-serif;
+    cursor:pointer; box-shadow:0 4px 14px rgba(46,125,50,0.3); transition:all 0.2s;
+  }
+  .check-btn:hover { transform:translateY(-2px); box-shadow:0 6px 18px rgba(46,125,50,0.4); }
+  .check-btn:active { transform:translateY(0); }
+
+  .result-card {
+    background:#fff; border-radius:18px; padding:24px 20px;
+    margin-bottom:12px; text-align:center;
+    box-shadow:0 2px 14px rgba(0,0,0,0.09); display:none;
+    animation:popIn 0.4s cubic-bezier(0.34,1.56,0.64,1) both;
+  }
+  .result-card.can  { border-top:5px solid #2e7d32; }
+  .result-card.wait { border-top:5px solid #f57c00; }
+  .result-icon  { font-size:48px; margin-bottom:8px; display:block; }
+  .result-title { font-size:20px; font-weight:800; color:#1a2e1a; margin-bottom:6px; }
+  .result-digit { font-size:38px; font-weight:800; letter-spacing:4px; margin:6px 0; font-family:'Baloo 2'; }
+  .result-digit.can  { color:#2e7d32; }
+  .result-digit.wait { color:#f57c00; }
+  .result-msg  { font-size:13px; color:#555; line-height:1.7; margin-bottom:12px; }
+  .next-info   { background:#f5f5f5; border-radius:10px; padding:9px 12px; font-size:12px; color:#666; margin-bottom:14px; }
+  .reset-btn {
+    width:100%; padding:12px; border:2px solid #e0e0e0; border-radius:12px;
+    background:#fff; color:#555; font-size:14px; font-weight:600;
+    font-family:'Noto Sans Sinhala',sans-serif; cursor:pointer; transition:all 0.2s;
+  }
+  .reset-btn:hover { background:#f5f5f5; }
+
+  .info-grid { display:grid; grid-template-columns:1fr 1fr; gap:9px; margin-bottom:12px; animation:fadeUp 0.4s 0.2s ease-out both; }
+  .info-tile { background:#fff; border-radius:12px; padding:12px; text-align:center; box-shadow:0 2px 8px rgba(0,0,0,0.06); }
+  .info-tile-icon { font-size:18px; margin-bottom:4px; }
+  .info-tile-lbl { font-size:10px; color:#aaa; text-transform:uppercase; letter-spacing:0.8px; margin-bottom:2px; font-family:'Baloo 2'; }
+  .info-tile-val { font-size:13px; font-weight:700; color:#333; }
+  .info-tile-val.even { color:#2e7d32; }
+  .info-tile-val.odd  { color:#e65100; }
+
+  /* CALENDAR */
+  .cal-card {
+    background:#fff; border-radius:18px; padding:18px;
+    box-shadow:0 2px 14px rgba(0,0,0,0.07); margin-bottom:12px;
+    animation:fadeUp 0.4s 0.1s ease-out both;
+  }
+  .cal-nav { display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; }
+  .cal-nav-btn {
+    background:#f0f4f0; border:none; border-radius:9px;
+    width:36px; height:36px; font-size:16px; cursor:pointer;
+    display:flex; align-items:center; justify-content:center;
+    color:#333; transition:background 0.15s; user-select:none;
+  }
+  .cal-nav-btn:hover { background:#c8e6c9; }
+  .cal-nav-btn:active { background:#a5d6a7; }
+  .cal-month-title { font-size:16px; font-weight:800; color:#1a2e1a; font-family:'Noto Sans Sinhala',sans-serif; text-align:center; flex:1; }
+
+  .cal-weekdays { display:grid; grid-template-columns:repeat(7,1fr); gap:3px; margin-bottom:5px; }
+  .cal-wday { text-align:center; font-size:10px; font-weight:700; padding:4px 2px; border-radius:6px; font-family:'Noto Sans Sinhala',sans-serif; }
+  .cal-wday.irida { background:#fff3e0; color:#e65100; }
+  .cal-wday.other { color:#888; }
+
+  .cal-grid { display:grid; grid-template-columns:repeat(7,1fr); gap:3px; }
+  .cal-day {
+    aspect-ratio:1; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; border-radius:9px;
+    font-size:13px; font-weight:700; font-family:'Baloo 2',cursive;
+  }
+  .cal-day.even-day { background:#e8f5e9; color:#1b5e20; }
+  .cal-day.odd-day  { background:#fff8e1; color:#bf360c; }
+  .cal-day.today { outline:3px solid #006600; outline-offset:-2px; font-weight:800; }
+  .cal-day.faded { opacity:0.4; }
+  .cal-day .dot { width:5px; height:5px; border-radius:50%; margin-top:1px; }
+  .cal-day.even-day .dot { background:#2e7d32; }
+  .cal-day.odd-day  .dot { background:#e65100; }
+
+  .cal-legend { display:flex; gap:10px; flex-wrap:wrap; margin-top:12px; justify-content:center; }
+  .legend-item { display:flex; align-items:center; gap:5px; font-size:11px; color:#666; }
+  .legend-box { width:14px; height:14px; border-radius:4px; flex-shrink:0; }
+  .legend-box.even { background:#e8f5e9; border:1.5px solid #a5d6a7; }
+  .legend-box.odd  { background:#fff8e1; border:1.5px solid #ffcc80; }
+  .legend-box.td   { background:#fff; border:3px solid #006600; border-radius:4px; }
+
+  .week-summary-card {
+    background:#fff; border-radius:18px; padding:18px;
+    box-shadow:0 2px 14px rgba(0,0,0,0.07); margin-bottom:12px;
+    animation:fadeUp 0.4s 0.2s ease-out both;
+  }
+  .wsum-title { font-size:13px; font-weight:700; color:#444; margin-bottom:10px; }
+  .week-rows { display:flex; flex-direction:column; gap:5px; }
+  .week-row {
+    display:flex; align-items:center; gap:8px;
+    padding:8px 12px; border-radius:9px; font-size:12px;
+  }
+  .week-row.even-row  { background:#e8f5e9; color:#1b5e20; }
+  .week-row.odd-row   { background:#fff8e1; color:#bf360c; }
+  .week-row.irida-row { background:#f5f5f5; color:#999; font-style:italic; }
+  .week-row .wr-date { font-family:'Baloo 2'; font-weight:800; min-width:26px; font-size:14px; }
+  .week-row .wr-day  { flex:1; font-family:'Noto Sans Sinhala'; }
+  .week-row .wr-type { font-weight:700; font-family:'Noto Sans Sinhala'; font-size:11px; }
+  .today-mark { background:#006600; color:#fff; border-radius:4px; padding:1px 5px; font-size:10px; font-family:'Baloo 2'; margin-left:4px; }
+
+  .footer { text-align:center; font-size:10px; color:#bbb; margin-top:8px; font-family:'Baloo 2'; }
+
+  /* SHEDS PANEL */
+  .search-bar-wrap {
+    background:#fff; border-radius:14px; padding:12px 14px;
+    margin-bottom:12px; box-shadow:0 2px 10px rgba(0,0,0,0.07);
+    display:flex; align-items:center; gap:10px;
+    animation:fadeUp 0.4s 0.1s ease-out both;
+  }
+  .search-icon { font-size:18px; flex-shrink:0; }
+  .search-input {
+    flex:1; border:none; outline:none; font-size:14px;
+    font-family:'Noto Sans Sinhala',sans-serif; color:#1a2e1a;
+    background:transparent;
+  }
+  .search-input::placeholder { color:#bbb; }
+  .search-clear {
+    background:none; border:none; font-size:18px; color:#bbb;
+    cursor:pointer; padding:0 2px; display:none;
+  }
+  .shed-district-title {
+    font-size:12px; font-weight:700; color:#fff; background:#006600;
+    border-radius:8px; padding:4px 12px; margin:10px 0 6px;
+    display:inline-block;
+  }
+  .shed-card {
+    background:#fff; border-radius:14px; padding:14px 16px;
+    margin-bottom:9px; box-shadow:0 2px 8px rgba(0,0,0,0.06);
+    border-left:4px solid #006600;
+  }
+  .shed-card.ceypetco { border-left-color:#006600; }
+  .shed-card.ioc      { border-left-color:#e53935; }
+  .shed-card.laugfs   { border-left-color:#f57c00; }
+  .shed-name { font-size:14px; font-weight:700; color:#1a2e1a; margin-bottom:4px; }
+  .shed-address { font-size:12px; color:#888; margin-bottom:8px; font-family:'Noto Sans Sinhala'; line-height:1.5; }
+  .shed-numbers { display:flex; flex-wrap:wrap; gap:6px; }
+  .shed-num-btn {
+    display:flex; align-items:center; gap:5px;
+    background:#e8f5e9; border:1.5px solid #a5d6a7;
+    border-radius:20px; padding:5px 12px;
+    font-size:13px; font-weight:700; color:#1b5e20;
+    text-decoration:none; font-family:'Baloo 2';
+    transition:all 0.15s;
+  }
+  .shed-num-btn:hover { background:#c8e6c9; }
+  .shed-num-btn.ioc-num { background:#fff3f3; border-color:#ffcdd2; color:#b71c1c; }
+  .shed-num-btn.laugfs-num { background:#fff8e1; border-color:#ffcc80; color:#bf360c; }
+  .shed-type-badge {
+    display:inline-block; font-size:10px; font-weight:700;
+    border-radius:5px; padding:2px 7px; margin-left:6px;
+    vertical-align:middle;
+  }
+  .badge-ceypetco { background:#e8f5e9; color:#2e7d32; }
+  .badge-ioc      { background:#fff3f3; color:#c62828; }
+  .badge-laugfs   { background:#fff8e1; color:#e65100; }
+  .no-results {
+    text-align:center; padding:30px 20px; color:#aaa;
+    font-size:14px; font-family:'Noto Sans Sinhala';
+  }
+  .shed-count { font-size:11px; color:#aaa; margin-bottom:10px; font-family:'Baloo 2'; }
+
+
+  #fuelMap { width:100%; height:320px; border-radius:14px; margin-bottom:12px; overflow:hidden; box-shadow:0 2px 14px rgba(0,0,0,0.1); display:none; }
+  .map-top-card { background:#fff; border-radius:14px; padding:14px 16px; margin-bottom:12px; box-shadow:0 2px 10px rgba(0,0,0,0.07); animation:fadeUp 0.4s 0.1s ease-out both; }
+  .map-top-title { font-size:13px; font-weight:700; color:#1a2e1a; margin-bottom:10px; }
+  .loc-btn { width:100%; padding:13px; border:none; border-radius:12px; background:linear-gradient(135deg,#2e7d32,#388e3c); color:#fff; font-size:15px; font-weight:700; font-family:'Noto Sans Sinhala',sans-serif; cursor:pointer; box-shadow:0 4px 14px rgba(46,125,50,0.3); transition:all 0.2s; display:flex; align-items:center; justify-content:center; gap:8px; }
+  .loc-btn:hover { transform:translateY(-2px); }
+  .loc-btn:disabled { background:#ccc; box-shadow:none; transform:none; cursor:not-allowed; }
+  .filter-row { display:flex; gap:7px; margin-top:10px; flex-wrap:wrap; }
+  .filter-btn { flex:1; min-width:70px; padding:8px 4px; border:1.5px solid #e0e0e0; border-radius:20px; background:#f5f5f5; font-size:12px; font-weight:700; cursor:pointer; font-family:'Baloo 2'; transition:all 0.15s; color:#555; }
+  .filter-btn.active-all { background:#e8f5e9; border-color:#a5d6a7; color:#1b5e20; }
+  .filter-btn.active-cpc { background:#e8f5e9; border-color:#2e7d32; color:#1b5e20; }
+  .filter-btn.active-ioc { background:#fff3f3; border-color:#e53935; color:#b71c1c; }
+  .filter-btn.active-laugfs { background:#fff8e1; border-color:#f57c00; color:#bf360c; }
+  .nearby-list-card { background:#fff; border-radius:14px; padding:16px; margin-bottom:12px; box-shadow:0 2px 10px rgba(0,0,0,0.07); display:none; }
+  .nearby-title { font-size:13px; font-weight:700; color:#444; margin-bottom:10px; }
+  .nearby-item { display:flex; align-items:center; gap:12px; padding:11px 0; border-bottom:1px solid #f5f5f5; }
+  .nearby-item:last-child { border-bottom:none; padding-bottom:0; }
+  .nearby-icon { font-size:22px; flex-shrink:0; }
+  .nearby-info { flex:1; }
+  .nearby-name { font-size:13px; font-weight:700; color:#1a2e1a; }
+  .nearby-dist { font-size:11px; color:#aaa; margin-top:2px; font-family:'Baloo 2'; }
+  .nearby-call { background:#e8f5e9; border:1.5px solid #a5d6a7; border-radius:20px; padding:6px 12px; font-size:12px; font-weight:700; color:#1b5e20; text-decoration:none; font-family:'Baloo 2'; white-space:nowrap; }
+  .nearby-call.ioc-c { background:#fff3f3; border-color:#ffcdd2; color:#b71c1c; }
+  .nearby-call.laugfs-c { background:#fff8e1; border-color:#ffcc80; color:#bf360c; }
+  .status-msg { text-align:center; padding:18px 10px; font-size:13px; color:#888; font-family:'Noto Sans Sinhala'; line-height:1.7; }
+  .loading-spin { display:inline-block; width:18px; height:18px; border:3px solid #e0e0e0; border-top-color:#006600; border-radius:50%; animation:spin 0.8s linear infinite; vertical-align:middle; margin-right:6px; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+
+  /* iOS install hint */
+  #iosHint {
+    display:none; background:#fff; border:1.5px solid #c8e6c9; border-radius:14px;
+    padding:14px 16px; margin-bottom:12px; font-size:13px; color:#444; line-height:1.6;
+    animation:fadeUp 0.4s ease-out both;
+  }
+  #iosHint strong { color:#006600; display:block; margin-bottom:4px; font-size:14px; }
+  #iosHint .close-ios { float:right; background:none; border:none; font-size:18px; cursor:pointer; color:#aaa; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <div class="header">
+    <div class="flag-strip"><div></div><div></div><div></div></div>
+    <div class="app-title">⛽ ලංකා <span>ඉන්ධන</span> පරීක්ෂකය</div>
+    <div class="subtitle">ඔබේ වාහනයට අද ඉන්ධන ලබා ගත හැකිද?</div>
+  </div>
+
+  <!-- Android install banner -->
+  <div id="installBanner">
+    <div class="ib-text">
+      <strong>📲 App එක Install කරන්න</strong>
+      Phone එකේ App එකක් ලෙස Save කරන්න — Internet නැතිව වැඩ කරයි!
+    </div>
+    <button id="installBtn">Install</button>
+    <button id="dismissBtn">✕</button>
+  </div>
+
+  <!-- iOS install hint -->
+  <div id="iosHint">
+    <button class="close-ios" onclick="document.getElementById('iosHint').style.display='none'">✕</button>
+    <strong>📲 iPhone/iPad — App Install කරන්න</strong>
+    Safari browser එකේ පහළ <strong>Share</strong> button (⬆️) ඔබා, <strong>"Add to Home Screen"</strong> select කරන්න. Internet නැතිව වැඩ කරයි!
+  </div>
+
+  <div class="date-card">
+    <div>
+      <div class="date-label">අද දිනය</div>
+      <div class="date-value" id="todayDate">—</div>
+    </div>
+    <div class="day-badge" id="dayBadge">—</div>
+  </div>
+
+  <div class="tabs">
+    <button class="tab-btn active" id="tabChecker" onclick="showTab('checker')">🔍 පරීක්ෂකය</button>
+    <button class="tab-btn" id="tabCalendar" onclick="showTab('calendar')">📅 දිනය</button>
+    <button class="tab-btn" id="tabSheds" onclick="showTab('sheds')">⛽ පිරවුම්හල්</button>
+  </div>
+
+  <!-- CHECKER -->
+  <div id="panelChecker">
+    <div class="main-card" id="inputCard">
+      <span class="input-label">🔢 වාහන අංකයේ අවසාන ඉලක්කම ඇතුල් කරන්න</span>
+      <div class="plate-display" id="plateDisplay">
+        <span style="color:#ccc;font-size:15px;font-family:'Noto Sans Sinhala'">අංකය ඇතුල් කරන්න</span>
+      </div>
+      <div class="hint">උදාහරණ: ABC-1234 නම් → අවසාන ඉලක්කම 4</div>
+      <div class="numpad">
+        <button class="num-btn" onclick="addDigit('1')">1</button>
+        <button class="num-btn" onclick="addDigit('2')">2</button>
+        <button class="num-btn" onclick="addDigit('3')">3</button>
+        <button class="num-btn" onclick="addDigit('4')">4</button>
+        <button class="num-btn" onclick="addDigit('5')">5</button>
+        <button class="num-btn" onclick="addDigit('6')">6</button>
+        <button class="num-btn" onclick="addDigit('7')">7</button>
+        <button class="num-btn" onclick="addDigit('8')">8</button>
+        <button class="num-btn" onclick="addDigit('9')">9</button>
+        <button class="num-btn zero" onclick="addDigit('0')">0</button>
+        <button class="num-btn del" onclick="clearDigit()">⌫</button>
+      </div>
+      <button class="check-btn" onclick="checkFuel()">✅ පරීක්ෂා කරන්න</button>
+    </div>
+
+    <div class="result-card" id="resultCard">
+      <span class="result-icon"  id="resultIcon"></span>
+      <div class="result-title"  id="resultTitle"></div>
+      <div class="result-digit"  id="resultDigit"></div>
+      <div class="result-msg"    id="resultMsg"></div>
+      <div class="next-info"     id="nextInfo"></div>
+      <button class="reset-btn" onclick="resetApp()">🔄 නැවත පරීක්ෂා කරන්න</button>
+    </div>
+
+    <div class="info-grid">
+      <div class="info-tile">
+        <div class="info-tile-icon">📅</div>
+        <div class="info-tile-lbl">ඉරට් දිනවල</div>
+        <div class="info-tile-val even">0, 2, 4, 6, 8</div>
+      </div>
+      <div class="info-tile">
+        <div class="info-tile-icon">📅</div>
+        <div class="info-tile-lbl">ඔත්ත දිනවල</div>
+        <div class="info-tile-val odd">1, 3, 5, 7, 9</div>
+      </div>
+      <div class="info-tile">
+        <div class="info-tile-icon">📞</div>
+        <div class="info-tile-lbl">FuelPass උදව්</div>
+        <div class="info-tile-val">076 000 1919</div>
+      </div>
+      <div class="info-tile">
+        <div class="info-tile-icon">🪪</div>
+        <div class="info-tile-lbl">අවශ්‍ය දේ</div>
+        <div class="info-tile-val" style="font-size:11px">QR කෝඩ් ගෙන යන්න</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CALENDAR -->
+  <div id="panelCalendar" style="display:none;">
+    <div class="cal-card">
+      <div class="cal-nav">
+        <button class="cal-nav-btn" onclick="changeWeek(-1)">◀</button>
+        <div class="cal-month-title" id="calTitle">—</div>
+        <button class="cal-nav-btn" onclick="changeWeek(1)">▶</button>
+      </div>
+      <div class="cal-weekdays" id="calWdays"></div>
+      <div class="cal-grid" id="calGrid"></div>
+      <div class="cal-legend">
+        <div class="legend-item"><div class="legend-box even"></div>ඉරට් දිනය</div>
+        <div class="legend-item"><div class="legend-box odd"></div>ඔත්ත දිනය</div>
+        <div class="legend-item"><div class="legend-box td"></div>අද</div>
+      </div>
+    </div>
+    <div class="week-summary-card">
+      <div class="wsum-title" id="wsumTitle">මෙම සතිය</div>
+      <div class="week-rows" id="weekRows"></div>
+    </div>
+  </div>
+
+
+  <!-- SHEDS -->
+  <div id="panelSheds" style="display:none;">
+    <div class="search-bar-wrap">
+      <span class="search-icon">🔍</span>
+      <input type="text" class="search-input" id="shedSearch" placeholder="ඉන්ධන පිරවුම්හල හෝ දිස්ත්‍රික්කය සොයන්න..." oninput="filterSheds(this.value)">
+      <button class="search-clear" id="searchClear" onclick="clearSearch()">✕</button>
+    </div>
+    <div class="shed-count" id="shedCount"></div>
+    <div id="shedList"></div>
+  </div>
+
+  <div class="footer">⛽ CPC / Ceypetco · 2026 ඉන්ධන කළමනාකරණ ක්‍රමය</div>
+</div>
+
+<script>
+const SI_SHORT  = ['ඉරිදා','සඳුදා','අඟහරු','බදාදා','බ්‍රහස්','සිකුරා','සෙනසුරු'];
+const SI_FULL   = ['ඉරිදා','සඳුදා','අඟහරුවාදා','බදාදා','බ්‍රහස්පතින්දා','සිකුරාදා','සෙනසුරාදා'];
+const SI_MONTHS = ['ජනවාරි','පෙබරවාරි','මාර්තු','අප්‍රේල්','මැයි','ජූනි','ජූලි','අගෝස්තු','සැප්තැම්බර්','ඔක්තෝබර්','නොවැම්බර්','දෙසැම්බර්'];
+
+let selectedDigit = null, weekOffset = 0;
+let deferredPrompt = null;
+
+// ---- PWA INSTALL ----
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  deferredPrompt = e;
+  document.getElementById('installBanner').style.display = 'flex';
+});
+
+document.getElementById('installBtn').addEventListener('click', async () => {
+  if (!deferredPrompt) return;
+  deferredPrompt.prompt();
+  const { outcome } = await deferredPrompt.userChoice;
+  deferredPrompt = null;
+  document.getElementById('installBanner').style.display = 'none';
+});
+
+document.getElementById('dismissBtn').addEventListener('click', () => {
+  document.getElementById('installBanner').style.display = 'none';
+});
+
+window.addEventListener('appinstalled', () => {
+  document.getElementById('installBanner').style.display = 'none';
+});
+
+// iOS detection — show manual hint
+function isIos() {
+  return /iphone|ipad|ipod/.test(navigator.userAgent.toLowerCase());
+}
+function isInStandaloneMode() {
+  return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+}
+if (isIos() && !isInStandaloneMode()) {
+  setTimeout(() => { document.getElementById('iosHint').style.display = 'block'; }, 1500);
+}
+
+// ---- SERVICE WORKER ----
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').catch(() => {});
+  });
+}
+
+// ---- DATE ----
+function initDate() {
+  const n = new Date(), d = n.getDate();
+  document.getElementById('todayDate').textContent =
+    `${SI_FULL[n.getDay()]}, ${d} ${SI_MONTHS[n.getMonth()]} ${n.getFullYear()}`;
+  const b = document.getElementById('dayBadge');
+  if (d%2===0) { b.textContent='📅 ඉරට් දිනය'; b.className='day-badge even'; }
+  else         { b.textContent='📅 ඔත්ත දිනය'; b.className='day-badge odd';  }
+}
+
+// ---- TABS ----
+function showTab(t) {
+  document.getElementById('panelChecker').style.display  = t==='checker'  ? '' : 'none';
+  document.getElementById('panelCalendar').style.display = t==='calendar' ? '' : 'none';
+  document.getElementById('panelSheds').style.display = t==='sheds' ? '' : 'none';
+  document.getElementById('tabChecker').className  = 'tab-btn'+(t==='checker'  ?' active':'');
+  document.getElementById('tabCalendar').className = 'tab-btn'+(t==='calendar' ?' active':'');
+  document.getElementById('tabSheds').className = 'tab-btn'+(t==='sheds' ?' active':'');
+  if(t==='sheds') renderSheds('');
+  if (t==='calendar') renderCalendar();
+}
+
+// ---- CHECKER ----
+function addDigit(d) {
+  selectedDigit = d;
+  const dp = document.getElementById('plateDisplay');
+  dp.innerHTML = `<span style="font-size:34px;font-weight:800;color:#1a2e1a;letter-spacing:4px;font-family:'Baloo 2'">${d}</span>`;
+  dp.style.borderColor='#2e7d32'; dp.style.background='#e8f5e9';
+}
+function clearDigit() {
+  selectedDigit = null;
+  const dp = document.getElementById('plateDisplay');
+  dp.style.borderColor='#c8e6c9'; dp.style.background='#f8faf8';
+  dp.innerHTML=`<span style="color:#ccc;font-size:15px;font-family:'Noto Sans Sinhala'">අංකය ඇතුල් කරන්න</span>`;
+}
+function checkFuel() {
+  if (selectedDigit===null) { alert('කරුණාකර අංකයක් ඇතුල් කරන්න!'); return; }
+  const digit=parseInt(selectedDigit), now=new Date(), dn=now.getDate();
+  const eDay=dn%2===0, eDig=digit%2===0, ok=(eDay&&eDig)||(!eDay&&!eDig);
+  const next=new Date(now); next.setDate(dn+1);
+  const ne=next.getDate()%2===0, nok=(ne&&eDig)||(!ne&&!eDig);
+
+  document.getElementById('inputCard').style.display='none';
+  const rc=document.getElementById('resultCard');
+  rc.style.display='block'; rc.style.animation='none';
+  rc.offsetHeight; rc.style.animation='popIn 0.4s cubic-bezier(0.34,1.56,0.64,1) both';
+
+  if (ok) {
+    rc.className='result-card can';
+    document.getElementById('resultIcon').textContent='✅';
+    document.getElementById('resultTitle').textContent='ඉන්ධන ලබා ගත හැකිය!';
+    document.getElementById('resultDigit').className='result-digit can';
+    document.getElementById('resultDigit').textContent=`··· ${digit}`;
+    document.getElementById('resultMsg').textContent=
+      `ඔබේ වාහන අංකය ${digit} ඉලක්කමෙන් අවසන් වේ. අද ${eDay?'ඉරට්':'ඔත්ත'} දිනයකි. QR කෝඩ් ගෙන ඉන්ධන පිරවුම්හලට යන්න.`;
+  } else {
+    rc.className='result-card wait';
+    document.getElementById('resultIcon').textContent='⏳';
+    document.getElementById('resultTitle').textContent='අද ලබා ගත නොහැකිය';
+    document.getElementById('resultDigit').className='result-digit wait';
+    document.getElementById('resultDigit').textContent=`··· ${digit}`;
+    document.getElementById('resultMsg').textContent=
+      `ඔබේ වාහන අංකය ${digit} ඉලක්කමෙන් අවසන් වේ. ${eDig?'ඉරට්':'ඔත්ත'} දිනවල (${eDig?'2, 4, 6, 8...':'1, 3, 5, 7...'}) ඉන්ධන ලබා ගත හැකිය.`;
+  }
+  document.getElementById('nextInfo').innerHTML=
+    `📍 හෙට ${SI_FULL[next.getDay()]} (${next.getDate()}) — ${ne?'ඉරට්':'ඔත්ත'} දිනය: ${nok?'✅ ලබා ගත හැකිය':'❌ ලබා ගත නොහැකිය'}`;
+}
+function resetApp() {
+  selectedDigit=null; clearDigit();
+  document.getElementById('inputCard').style.display='block';
+  document.getElementById('resultCard').style.display='none';
+}
+
+// ---- CALENDAR ----
+function changeWeek(dir) { weekOffset+=dir; renderCalendar(); }
+
+function getWeekSunday(base, offset) {
+  const d=new Date(base); d.setHours(0,0,0,0);
+  d.setDate(d.getDate()-d.getDay()+offset*7); return d;
+}
+
+function renderCalendar() {
+  const today=new Date(); today.setHours(0,0,0,0);
+  const wStart=getWeekSunday(today,weekOffset);
+  const wEnd=new Date(wStart); wEnd.setDate(wStart.getDate()+6);
+
+  const m1=wStart.getMonth(),m2=wEnd.getMonth(),y1=wStart.getFullYear(),y2=wEnd.getFullYear();
+  let title=SI_MONTHS[m1]+' '+y1;
+  if (m1!==m2) title+=' – '+SI_MONTHS[m2]+(y1!==y2?' '+y2:'');
+  document.getElementById('calTitle').textContent=title;
+
+  const wdEl=document.getElementById('calWdays'); wdEl.innerHTML='';
+  SI_SHORT.forEach((d,i)=>{
+    const div=document.createElement('div');
+    div.className='cal-wday '+(i===0?'irida':'other');
+    div.textContent=d; wdEl.appendChild(div);
+  });
+
+  const dispStart=new Date(wStart); dispStart.setDate(wStart.getDate()-14);
+  const grid=document.getElementById('calGrid'); grid.innerHTML='';
+  for (let i=0;i<35;i++) {
+    const d=new Date(dispStart); d.setDate(dispStart.getDate()+i);
+    const isToday=d.getTime()===today.getTime(), isEven=d.getDate()%2===0;
+    const inCur=d>=wStart&&d<=wEnd;
+    const cell=document.createElement('div');
+    cell.className='cal-day '+(isEven?'even-day':'odd-day')+(isToday?' today':'')+(!inCur?' faded':'');
+    cell.innerHTML=`<span>${d.getDate()}</span><div class="dot"></div>`;
+    cell.title=`${d.getDate()} ${SI_MONTHS[d.getMonth()]} — ${isEven?'ඉරට් දිනය':'ඔත්ත දිනය'}`;
+    grid.appendChild(cell);
+  }
+
+  const rows=document.getElementById('weekRows'); rows.innerHTML='';
+  document.getElementById('wsumTitle').textContent=
+    `${wStart.getDate()} ${SI_MONTHS[wStart.getMonth()]} – ${wEnd.getDate()} ${SI_MONTHS[wEnd.getMonth()]} — සතිය`;
+
+  for (let i=0;i<7;i++) {
+    const d=new Date(wStart); d.setDate(wStart.getDate()+i);
+    const isIrida=d.getDay()===0, isEven=d.getDate()%2===0, isToday=d.getTime()===today.getTime();
+    const row=document.createElement('div');
+    row.className='week-row '+(isIrida?'irida-row':(isEven?'even-row':'odd-row'));
+    const tb=isToday?`<span class="today-mark">අද</span>`:'';
+    row.innerHTML=`
+      <span class="wr-date">${d.getDate()}</span>
+      <span class="wr-day">${SI_FULL[d.getDay()]}${tb}</span>
+      <span class="wr-type">${isIrida?'නිවාඩු':(isEven?'ඉරට් (0,2,4,6,8)':'ඔත්ත (1,3,5,7,9)')}</span>
+    `;
+    rows.appendChild(row);
+  }
+}
+
+
+// ---- MAP & NEARBY SHEDS ----
+let map = null, userMarker = null, shedMarkers = [], activeFilter = 'all', userLatLng = null, lastSheds = [];
+
+function makeIcon(color) {
+  return L.divIcon({
+    className:'',
+    html:'<div style="background:'+color+';width:28px;height:28px;border-radius:50%;border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:center;font-size:14px;">⛽</div>',
+    iconSize:[28,28], iconAnchor:[14,14], popupAnchor:[0,-16]
+  });
+}
+function makeUserIcon() {
+  return L.divIcon({
+    className:'',
+    html:'<div style="background:#1565c0;width:18px;height:18px;border-radius:50%;border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.4);"></div>',
+    iconSize:[18,18], iconAnchor:[9,9]
+  });
+}
+function setStatus(html) {
+  const el = document.getElementById('statusMsg');
+  el.style.display = 'block';
+  el.innerHTML = html;
+}
+function initMap(lat, lng) {
+  const mapEl = document.getElementById('fuelMap');
+  mapEl.style.display = 'block';
+  if (!map) {
+    map = L.map('fuelMap', {zoomControl:true}).setView([lat, lng], 14);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution:'OpenStreetMap', maxZoom:19
+    }).addTo(map);
+  } else {
+    map.setView([lat, lng], 14);
+  }
+  if (userMarker) userMarker.remove();
+  userMarker = L.marker([lat, lng], {icon: makeUserIcon()})
+    .addTo(map).bindPopup('ඔබේ ස්ථානය');
+}
+function clearShedMarkers() {
+  shedMarkers.forEach(m => m.remove());
+  shedMarkers = [];
+}
+function getType(tags) {
+  const n = ((tags.name||'')+(tags['name:en']||'')+(tags.brand||'')).toLowerCase();
+  if (n.includes('ioc')) return 'ioc';
+  if (n.includes('laugfs')) return 'laugfs';
+  return 'cpc';
+}
+function distKm(la1,lo1,la2,lo2) {
+  const R=6371, dL=(la2-la1)*Math.PI/180, dO=(lo2-lo1)*Math.PI/180;
+  const a=Math.sin(dL/2)**2+Math.cos(la1*Math.PI/180)*Math.cos(la2*Math.PI/180)*Math.sin(dO/2)**2;
+  return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+}
+async function fetchSheds(lat, lng) {
+  const q='[out:json][timeout:25];(node["amenity"="fuel"](around:5000,'+lat+','+lng+');way["amenity"="fuel"](around:5000,'+lat+','+lng+'););out center tags;';
+  const res = await fetch('https://overpass-api.de/api/interpreter?data='+encodeURIComponent(q));
+  const data = await res.json();
+  return data.elements || [];
+}
+function showMarkers(sheds, ulat, ulng) {
+  clearShedMarkers();
+  const list = activeFilter==='all' ? sheds : sheds.filter(s=>s._type===activeFilter);
+  list.forEach(s => {
+    const lat=s.lat||s.center&&s.center.lat, lng=s.lon||s.center&&s.center.lon;
+    if (!lat||!lng) return;
+    const color = s._type==='ioc'?'#e53935':s._type==='laugfs'?'#f57c00':'#2e7d32';
+    const name = s.tags&&(s.tags.name||s.tags['name:en']||s.tags.brand)||'ඉන්ධන පිරවුම්හල';
+    const dist = distKm(ulat,ulng,lat,lng);
+    const phone = s.tags&&(s.tags.phone||s.tags['contact:phone'])||'';
+    const ph = phone?'<br><a href="tel:'+phone.replace(/ /g,'')+'">Call: '+phone+'</a>':'';
+    const m = L.marker([lat,lng],{icon:makeIcon(color)}).addTo(map)
+      .bindPopup('<b>'+name+'</b><br>'+dist.toFixed(1)+' km'+ph);
+    shedMarkers.push(m);
+  });
+  setTimeout(()=>{if(map) map.invalidateSize();},200);
+}
+function showList(sheds, ulat, ulng) {
+  const list = activeFilter==='all' ? sheds : sheds.filter(s=>s._type===activeFilter);
+  const sorted = list.map(s=>({...s,_d:distKm(ulat,ulng,s.lat||s.center&&s.center.lat||0,s.lon||s.center&&s.center.lon||0)}))
+    .filter(s=>s._d<50).sort((a,b)=>a._d-b._d).slice(0,10);
+  const listEl = document.getElementById('nearbyList');
+  const itemsEl = document.getElementById('nearbyItems');
+  if (!sorted.length) { listEl.style.display='none'; setStatus('⚠️ km 5 ඇතුළේ sheds නෑ.'); return; }
+  document.getElementById('nearbyTitle').textContent='ළඟම පිරවුම්හල් '+sorted.length+'ක්';
+  listEl.style.display='block';
+  document.getElementById('statusMsg').style.display='none';
+  itemsEl.innerHTML=sorted.map(s=>{
+    const name=s.tags&&(s.tags.name||s.tags['name:en']||s.tags.brand)||'ඉන්ධන පිරවුම්හල';
+    const phone=s.tags&&(s.tags.phone||s.tags['contact:phone'])||'';
+    const t=s._type||'cpc';
+    const cc=t==='ioc'?'ioc-c':t==='laugfs'?'laugfs-c':'';
+    const tl=t==='ioc'?'🔴 IOC':t==='laugfs'?'🟡 Laugfs':'🟢 CPC';
+    const pb=phone?'<a href="tel:'+phone.replace(/ /g,'')+'" class="nearby-call '+cc+'">📞 Call</a>':'<span style="font-size:11px;color:#bbb;">දු.අ. නෑ</span>';
+    return '<div class="nearby-item"><span class="nearby-icon">⛽</span><div class="nearby-info"><div class="nearby-name">'+name+'</div><div class="nearby-dist">'+tl+' · '+s._d.toFixed(1)+' km</div></div>'+pb+'</div>';
+  }).join('');
+}
+async function findNearby() {
+  const btn=document.getElementById('locBtn');
+  btn.disabled=true;
+  btn.innerHTML='<span class="loading-spin"></span> සොයනවා...';
+  setStatus('<span class="loading-spin"></span> Location ලබාගනිමින්...');
+  navigator.geolocation.getCurrentPosition(async pos=>{
+    const lat=pos.coords.latitude, lng=pos.coords.longitude;
+    userLatLng=[lat,lng];
+    setStatus('<span class="loading-spin"></span> ළඟම Sheds සොයනවා...');
+    try {
+      initMap(lat,lng);
+      const sheds=await fetchSheds(lat,lng);
+      sheds.forEach(s=>{s._type=getType(s.tags||{});});
+      lastSheds=sheds;
+      showMarkers(sheds,lat,lng);
+      showList(sheds,lat,lng);
+      document.getElementById('filterRow').style.display='flex';
+      btn.innerHTML='🔄 නැවත සොයන්න';
+    } catch(e) {
+      setStatus('⚠️ Data load වුණේ නෑ. Internet check කරන්න.');
+      btn.innerHTML='📡 නැවත සොයන්න';
+    }
+    btn.disabled=false;
+  }, err=>{
+    setStatus('❌ Location allow කරන්න.<br><small>Browser Settings ගිහින් Location enable කරන්න.</small>');
+    btn.innerHTML='📡 ළඟම Sheds සොයන්න';
+    btn.disabled=false;
+  },{enableHighAccuracy:true,timeout:10000});
+}
+function setFilter(f) {
+  activeFilter=f;
+  ['All','Cpc','Ioc','Laugfs'].forEach(n=>{
+    const e=document.getElementById('f'+n);
+    if(e) e.className='filter-btn';
+  });
+  const cls=f==='all'?'active-all':f==='cpc'?'active-cpc':f==='ioc'?'active-ioc':'active-laugfs';
+  const id=f==='all'?'fAll':f==='cpc'?'fCpc':f==='ioc'?'fIoc':'fLaugfs';
+  document.getElementById(id).className='filter-btn '+cls;
+  if (userLatLng&&lastSheds.length) {
+    showMarkers(lastSheds,userLatLng[0],userLatLng[1]);
+    showList(lastSheds,userLatLng[0],userLatLng[1]);
+  }
+}
+async function searchByCity(city) {
+  if (!city.trim()) return;
+  setStatus('<span class="loading-spin"></span> "'+city+'" සොයනවා...');
+  document.getElementById('fuelMap').style.display='block';
+  try {
+    const gr=await fetch('https://nominatim.openstreetmap.org/search?q='+encodeURIComponent(city+', Sri Lanka')+'&format=json&limit=1');
+    const gd=await gr.json();
+    if (!gd.length){setStatus('❌ "'+city+'" සොයාගත නොහැකි.');return;}
+    const lat=parseFloat(gd[0].lat),lng=parseFloat(gd[0].lon);
+    userLatLng=[lat,lng];
+    initMap(lat,lng);
+    const sheds=await fetchSheds(lat,lng);
+    sheds.forEach(s=>{s._type=getType(s.tags||{});});
+    lastSheds=sheds;
+    showMarkers(sheds,lat,lng);
+    showList(sheds,lat,lng);
+    document.getElementById('filterRow').style.display='flex';
+  } catch(e) {
+    setStatus('⚠️ Error. Internet check කරන්න.');
+  }
+}
+
+
+initDate();
+</script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+</body>
+</html>
